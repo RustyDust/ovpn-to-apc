@@ -7,6 +7,10 @@
 # (C) 2012 Stefan Rubner    <stefan@whocares.de>
 # -----------------------------------------------
 # Changes:
+# 2012-05-28
+#   Stefan Rubner
+#    * Added support for 'tls-auth' in old style
+#      .ovpn files, too
 # 2012-05-26
 #   Stefan Rubner:
 #    * Started work on making the script work
@@ -93,15 +97,33 @@ get_cert() {
 # .ovpn file
 ##
 get_ta() {
-	# Create file with the ta.key
-	tafile=`mktemp --tmpdir=. --suffix=.key ta_XXXXXXXX`
-	sed -n "/<tls-auth>/,/<\/tls-auth>/p" ${OvpnFile} | grep -v "^#" > ${tafile}
-	# patch up the server_dn info to include
-	# the necessary tls stuff
-    takey="${TmpDir}/ta.key"
-    echo "/CN=OpenVPN_Server" > ${takey}
-    echo "tls-auth /etc/${tafile:2}" >> ${takey}
-	echo "key-direction 1" >> ${takey}
+	if [ -z "${isxml}" ]; then
+		# old config, look for 'tls-auth' statement
+		tlsauth=`grep "^tls-auth " ${OvpnFile} | cut -d ' ' -f2 |tr -d '\r\n'`
+		if [ ! -z "${tlsauth}" ]; then
+			# we have a tls-auth key
+			tafile=`mktemp ./ta_XXXXXXXX.key`
+			takey="${TmpDir}/ta.key"
+			cat ${tlsauth} > ${tafile}
+			if [ -z "${tlsremote}" ]; then
+				echo "/CN=OpenVPN_Server" > ${takey}
+			else
+				echo "${tlsremote}" > ${takey}
+			fi
+			echo "tls-auth /etc/${tafile:2}" >> ${takey}
+			echo "key-direction 1" >> ${takey}
+		fi
+	else
+		# Create file with the ta.key
+		tafile=`mktemp ./ta_XXXXXXXX.key`
+		sed -n "/<tls-auth>/,/<\/tls-auth>/p" ${OvpnFile} | grep -v "^#" > ${tafile}
+		# patch up the server_dn info to include
+		# the necessary tls stuff
+    	takey="${TmpDir}/ta.key"
+    	echo "/CN=OpenVPN_Server" > ${takey}
+    	echo "tls-auth /etc/${tafile:2}" >> ${takey}
+		echo "key-direction 1" >> ${takey}
+	fi
 }
 
 ##
@@ -198,10 +220,10 @@ fi
 ##
 # Check for type of .ovpn file
 ##
+TmpDir=`mktemp -d`
 isxml=`grep "<ca>" ${1}`
 if [ "${isxml}" == "<ca>" ]; then
 	isxml=1
-	TmpDir=`mktemp -d`
 else
 	isxml=
 fi
@@ -406,25 +428,36 @@ if [ ! -z "${isxml}" ]; then
 	cat ${takey} >> ${ApcFile}
 else
 	# Standard procedure ...
-	var=`grep "^tls-remote " ${OvpnFile} | cut -d '"' -f2 |tr -d '\r\n'`
-	if [ -z "${var}" ]; then
+	tlsremote=`grep "^tls-remote " ${OvpnFile} | cut -d '"' -f2 |tr -d '\r\n'`
+	if [ -z "${tlsremote}" ]; then
     	# need to fetch CN from .crt
-    	var=`grep DirName ${cert} | awk -F'CN=' '{ print $2 }' | awk -F'/' '{ print $1 }'`
-    	if [ -z "${var}" ]; then
+    	tlsremote=`grep DirName ${cert} | awk -F'CN=' '{ print $2 }' | awk -F'/' '{ print $1 }'`
+    	if [ -z "${tlsremote}" ]; then
     		# still no luck so make one up
-			var="/CN=OpenVPN_CA"
+			tlsremote="/CN=OpenVPN_Server"
 		fi
 	else
     	# check whether CN was set without quotes 
-    	temp=`echo ${var} | grep "^tls-remote "`
-    	if [ "${temp}" = "${var}" ]; then
-        	var=`grep "^tls-remote " ${OvpnFile} | cut -d ' ' -f2 |tr -d '\r\n'`
+    	temp=`echo ${tlsremote} | grep "^tls-remote "`
+    	if [ "${temp}" = "${tlsremote}" ]; then
+        	tlsremote=`grep "^tls-remote " ${OvpnFile} | cut -d ' ' -f2 |tr -d '\r\n'`
     	fi
 	fi
-	varlen=`echo ${var} | tr -d '\r\n' | wc -c`
-	varlen=`echo "obase=16; ${varlen}" | bc -q`
-	printf "\x${varlen}" >> ${ApcFile}
-	echo $var | tr -d '\r\n' >> ${ApcFile}
+	##
+	# Check for tls-auth
+	##
+	get_ta
+	if [ -z "${takey}" ]; then
+		varlen=`echo ${tlsremote} | tr -d '\r\n' | wc -c`
+		varlen=`echo "obase=16; ${varlen}" | bc -q`
+		printf "\x${varlen}" >> ${ApcFile}
+		echo $tlsremote | tr -d '\r\n' >> ${ApcFile}
+	else
+		varlen=`cat ${takey} | wc -c`
+		varlen=`echo "obase=16; ${varlen}" | bc -q`
+		printf "\x${varlen}" >> ${ApcFile}
+		cat ${takey} >> ${ApcFile}
+	fi
 fi
 printf "\x09\x00\x00\x00" >> ${ApcFile}
 echo server_dn >> ${ApcFile}
