@@ -56,7 +56,7 @@ write_header() {
 ##
 get_ca() {
     if [ -z "${isxml}" ]; then
-        ca=`grep "^ca " ${OvpnFile} | cut -d ' ' -f2 |tr -d '\r\n'`
+        ca=`grep "^ca " ${OvpnFile} | awk '{print $2}' |tr -d '\r\n'`
     else
     	ca="${TmpDir}/ca.crt"
 		sed -n "/<ca>/,/<\/ca>/p" ${OvpnFile} | grep -v "ca>" > ${ca} 
@@ -70,7 +70,7 @@ get_ca() {
 ##
 get_key() {
     if [ -z "${isxml}" ]; then
-		key=`grep "^key " ${OvpnFile} | cut -d ' ' -f2 |tr -d '\r\n'`
+		key=`grep "^key " ${OvpnFile} | awk '{print $2}' |tr -d '\r\n'`
     else
     	key="${TmpDir}/user.key"
 		sed -n "/<key>/,/<\/key>/p" ${OvpnFile} | grep -v "key>" > ${key} 
