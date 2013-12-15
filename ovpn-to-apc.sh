@@ -106,23 +106,28 @@ get_ta() {
 			takey="${TmpDir}/ta.key"
 			cat ${tlsauth} > ${tafile}
 			if [ -z "${tlsremote}" ]; then
-				echo "/CN=OpenVPN_Server" > ${takey}
-			else
-				echo "${tlsremote}" > ${takey}
-			fi
-			echo "tls-auth /etc/${tafile:2}" >> ${takey}
-			echo "key-direction 1" >> ${takey}
-		fi
-	else
+                                echo "/CN=OpenVPN_Server" > ${takey}
+                        else
+                                echo "${tlsremote}\"" > ${takey}
+                        fi
+                        echo "tls-auth /etc/${tafile:2}" >> ${takey}
+                        echo -n "key-direction \"1" >> ${takey}
+                fi
+        else
 		# Create file with the ta.key
 		tafile=`mktemp ./ta_XXXXXXXX.key`
 		sed -n "/<tls-auth>/,/<\/tls-auth>/p" ${OvpnFile} | grep -v "^#" > ${tafile}
 		# patch up the server_dn info to include
 		# the necessary tls stuff
-    	takey="${TmpDir}/ta.key"
-    	echo "/CN=OpenVPN_Server" > ${takey}
-    	echo "tls-auth /etc/${tafile:2}" >> ${takey}
-		echo "key-direction 1" >> ${takey}
+    		takey="${TmpDir}/ta.key"
+		tlsremote=`grep "^tls-remote " ${OvpnFile} | cut -d ' ' -f2 |tr -d '\r\n'`
+		if [ -z "${tlsremote}" ]; then
+    		echo "/CN=OpenVPN_Server\"" > ${takey}
+		else
+    		echo ${tlsremote}\" > ${takey}
+		fi
+		echo "tls-auth /etc/${tafile:2}" >> ${takey}
+		echo -n "key-direction \"1" >> ${takey}
 	fi
 }
 
@@ -178,11 +183,17 @@ if [ $# -lt 2 ] || [ $# -gt 4 ]; then
     exit
 fi
 
-##
 # Remember our input values
 ##
 OvpnFile=${1}
 ApcFile=${2}
+
+##
+# Convert Dos to Unix
+##
+tr -d '\r' < ${OvpnFile} > tmp.ovpn
+rm ${OvpnFile}
+mv tmp.ovpn ${OvpnFile}
 
 echo "Using input file        : ${OvpnFile}"
 echo ""
@@ -213,6 +224,10 @@ fi
 # Passwort field is required by Astaro but
 # wrong content doesn't hurt operations
 ##
+if [ -z "${user}" ]; then
+    user="dummy"
+fi
+
 if [ -z "${pass}" ]; then
     pass="dummy"
 fi
