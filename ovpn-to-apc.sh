@@ -240,7 +240,7 @@ fi
 ##
 # Check for type of .ovpn file
 ##
-TmpDir=`mktemp -d`
+TmpDir=`mktemp -d ovpn-to-apc_XXXXXXXX`
 isxml=`grep "<ca>" ${1}`
 if [ "${isxml}" == "<ca>" ]; then
 	isxml=1
