@@ -140,6 +140,11 @@ get_host_port_proto() {
 		# do it the old way
 		RemHost=`grep "^remote " ${OvpnFile} | cut -d ' ' -f2 |tr -d '\r\n'`
 		RemPort=`grep "^remote " ${OvpnFile} | cut -d ' ' -f3 |tr -d '\r\n'`
+
+		if [ -z "${RemPort}" ]; then
+			RemPort=`grep "^port " ${OvpnFile} | cut -d ' ' -f2 |tr -d '\r\n'`
+		fi
+
 		RemProto=`grep "^proto " ${OvpnFile} | cut -d ' ' -f2 |tr -d '\r\n'`
 	else
 		# Check whether we have a protocol statement
